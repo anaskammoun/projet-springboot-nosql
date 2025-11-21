@@ -7,6 +7,7 @@ import lombok.RequiredArgsConstructor;
 import com.projet.entity.Vehicle;
 import com.projet.service.VehicleService;
 
+@CrossOrigin(origins = "http://localhost:5173")
 @RestController
 @RequestMapping("/api/vehicles")
 @RequiredArgsConstructor

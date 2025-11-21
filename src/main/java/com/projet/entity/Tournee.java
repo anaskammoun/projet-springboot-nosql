@@ -12,6 +12,8 @@ public class Tournee {
     @Id
     private String id;
 
+    private long date;
+
     private List<String> collectPoints; // IDs
     private String vehicleId;           
     private String employeeId;          

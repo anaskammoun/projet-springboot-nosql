@@ -6,7 +6,7 @@ import lombok.RequiredArgsConstructor;
 
 import com.projet.entity.CollectPoint;
 import com.projet.service.CollectPointService;
-
+@CrossOrigin(origins = "http://localhost:5173")
 @RestController
 @RequestMapping("/api/collect-points")
 @RequiredArgsConstructor

@@ -8,6 +8,7 @@ import com.projet.service.EmployeeService;
 
 import lombok.RequiredArgsConstructor;
 
+@CrossOrigin(origins = "http://localhost:5173")
 @RestController
 @RequestMapping("/api/employees")
 @RequiredArgsConstructor

@@ -8,8 +8,9 @@ import com.projet.service.TourneeService;
 
 import lombok.RequiredArgsConstructor;
 
+@CrossOrigin(origins = "http://localhost:5173")
 @RestController
-@RequestMapping("/api/tournees")
+@RequestMapping("/api/tours")
 @RequiredArgsConstructor
 public class TourneeController {
 
