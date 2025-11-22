@@ -16,7 +16,7 @@ public class Tournee {
 
     private List<String> collectPoints; // IDs
     private String vehicleId;           
-    private String employeeId;          
+    private List<String> employeeIds;          
 
     private String status;  // planifiée, en cours, terminée
     private double estimatedDistance; // km

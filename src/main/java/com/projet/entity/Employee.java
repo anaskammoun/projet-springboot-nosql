@@ -14,7 +14,10 @@ public class Employee {
     private String id;
 
     private String name;
-    private String role;       // conducteur, agent de collecte…
+
+    // role à disctuter si on va laisser ou non
+    private String role;       // conducteur, agent de collecte… 
+
     private List<String> skills;      // tri, conduite, nettoyage…
     private boolean available; // disponibilité
 }
