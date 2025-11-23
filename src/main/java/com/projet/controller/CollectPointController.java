@@ -25,4 +25,20 @@ public class CollectPointController {
 
     @DeleteMapping("/{id}")
     public void delete(@PathVariable String id) { service.delete(id); }
+
+    @PutMapping("/{id}")
+        public CollectPoint update(@PathVariable String id, @RequestBody CollectPoint p) {
+            CollectPoint existing = service.findById(id);
+            if (existing == null) return null;
+
+            // Mettre à jour les champs
+            existing.setWasteType(p.getWasteType());
+            existing.setFillLevel(p.getFillLevel());
+            existing.setStatus(p.getStatus());
+            existing.setLatitude(p.getLatitude());
+            existing.setLongitude(p.getLongitude());
+
+            return service.save(existing);
+        }
+
 }

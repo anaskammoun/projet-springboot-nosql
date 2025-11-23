@@ -27,4 +27,17 @@ public class TourneeController {
 
     @DeleteMapping("/{id}")
     public void delete(@PathVariable String id) { service.delete(id); }
+    @PutMapping("/{id}")
+        public Tournee update(@PathVariable String id, @RequestBody Tournee t) {    
+            Tournee existing = service.findById(id);
+            if (existing == null) return null;
+
+            // Mettre à jour les champs
+            existing.setDate(t.getDate());
+            existing.setVehicleId(t.getVehicleId());
+            existing.setEmployeeIds(t.getEmployeeIds());
+            existing.setCollectPoints(t.getCollectPoints());
+
+            return service.save(existing);
+        }       
 }

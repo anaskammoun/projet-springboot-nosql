@@ -35,4 +35,20 @@ public class EmployeeController {
     public void delete(@PathVariable String id) {
         employeeService.delete(id);
     }
+
+    @PutMapping("/{id}")
+    public Employee update(@PathVariable String id, @RequestBody Employee e) {
+        Employee existing = employeeService.findById(id);
+        if (existing == null) return null;
+
+        // Mettre à jour les champs
+        existing.setName(e.getName());
+        existing.setRole(e.getRole());
+        existing.setAvailable(e.isAvailable());
+        existing.setSkills(e.getSkills()); // si tu as un champ compétences
+        // ajoute d’autres champs si nécessaire
+
+        return employeeService.save(existing);
+    }
+
 }

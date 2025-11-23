@@ -26,4 +26,16 @@ public class VehicleController {
 
     @DeleteMapping("/{id}")
     public void delete(@PathVariable String id) { service.delete(id); }
+    @PutMapping("/{id}")
+        public Vehicle update(@PathVariable String id, @RequestBody Vehicle v) {
+            Vehicle existing = service.findById(id);
+            if (existing == null) return null;
+
+            // Mettre à jour les champs
+            existing.setType(v.getType());
+            existing.setAvailable(v.isAvailable());
+            existing.setCapacity(v.getCapacity());
+
+            return service.save(existing);
+        }   
 }

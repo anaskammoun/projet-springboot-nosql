@@ -27,4 +27,20 @@ public class NotificationController {
 
     @DeleteMapping("/{id}")
     public void delete(@PathVariable String id) { service.delete(id); }
+    @PutMapping("/{id}")
+        public Notification update(@PathVariable String id, @RequestBody Notification n) {
+            Notification existing = service.findById(id);
+            if (existing == null) return null;
+
+            // Mettre à jour les champs
+            existing.setMessage(n.getMessage());
+            existing.setTimestamp(n.getTimestamp());
+            existing.setType(n.getType());
+            existing.setCollectPointId(n.getCollectPointId());
+            
+
+            return service.save(existing);
+        }
+
+    
 }
