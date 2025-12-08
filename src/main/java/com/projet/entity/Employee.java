@@ -1,6 +1,8 @@
 package com.projet.entity;
 
+import java.util.List;
 import org.springframework.data.annotation.Id;
+import org.springframework.data.mongodb.core.index.Indexed;
 import org.springframework.data.mongodb.core.mapping.Document;
 
 import lombok.Data;
@@ -14,10 +16,11 @@ public class Employee {
 
     private String name;
 
-    // role à disctuter si on va laisser ou non
-    private String role;       // conducteur, agent de collecte… 
-    
-    //private List<String> skills;
+    @Indexed(unique = true)
+    private String cin;
+
+    // Liste des compétences de l'employé
+    private List<String> skills;
   
     private boolean available; // disponibilité
     

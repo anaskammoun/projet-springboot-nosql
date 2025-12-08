@@ -37,7 +37,7 @@ public class NotificationController {
             existing.setTimestamp(n.getTimestamp());
             existing.setType(n.getType());
             existing.setCollectPointId(n.getCollectPointId());
-            existing.setTourneeId(n.getTourneeId());
+            //existing.setTourneeId(n.getTourneeId());
             existing.setLatitude(n.getLatitude());
             existing.setLongitude(n.getLongitude());
             existing.setRead(n.getRead());

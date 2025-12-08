@@ -14,7 +14,7 @@ public class Notification {
     private String type;     // conteneur plein / incident
     private String message;
     private String collectPointId;
-    private String tourneeId;
+    //private String tourneeId;
     private long timestamp;
     // optionally store the location that caused the notification
     private Double latitude;

@@ -46,7 +46,7 @@ public class CollectPointService {
                 String msg = String.format("Point de collecte %s (%s) dépasse 80%% — %.1f%%", saved.getId(), saved.getWasteType() == null ? "?" : saved.getWasteType(), newRatio);
                 n.setMessage(msg);
                 n.setCollectPointId(saved.getId());
-                n.setTourneeId(null);
+                //n.setTourneeId(null);
                 n.setLatitude(saved.getLatitude());
                 n.setLongitude(saved.getLongitude());
                 n.setRead(false);
@@ -99,7 +99,7 @@ public List<CollectPoint> randomizeCapacities() {
                 String msg = String.format("Point de collecte %s (%s) dépasse 80%% — %.1f%%", p.getId(), p.getWasteType() == null ? "?" : p.getWasteType(), newRatio);
                 n.setMessage(msg);
                 n.setCollectPointId(p.getId());
-                n.setTourneeId(null);
+                //n.setTourneeId(null);
                 n.setLatitude(p.getLatitude());
                 n.setLongitude(p.getLongitude());
                 n.setRead(false);

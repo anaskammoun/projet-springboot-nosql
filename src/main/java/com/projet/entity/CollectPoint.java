@@ -19,6 +19,7 @@ public class CollectPoint {
     //private int fillLevel;
     private double capacityLiters; // current capacity in liters
     private double maxCapacityLiters; // maximum capacity in liters
+    private Double niveau;         // niveau de remplissage en pourcentage (0-100)
 
     private String status;         // VIDE – NORMAL – PRESQUE_PLEIN – PLEIN
 }

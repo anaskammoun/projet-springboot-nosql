@@ -15,9 +15,12 @@ import org.springframework.stereotype.Service;
 import com.projet.entity.CollectPoint;
 import com.projet.entity.Tournee;
 import com.projet.entity.Vehicle;
+import com.projet.entity.Employee;
+import com.projet.dto.TourneeStatsResponse;
 import com.projet.repository.CollectPointRepository;
 import com.projet.repository.TourneeRepository;
 import com.projet.repository.VehicleRepository;
+import com.projet.repository.EmployeeRepository;
 
 import lombok.RequiredArgsConstructor;
 
@@ -47,6 +50,7 @@ public class TourneeService {
     private final TourneeRepository repo;
     private final CollectPointRepository collectPointRepo;
     private final VehicleRepository vehicleRepo;
+    private final EmployeeRepository employeeRepo;
     private final EmployeeService employeeService;
 
     // Utilitaires
@@ -55,10 +59,55 @@ public class TourneeService {
     // -----------------------
     // Basic CRUD wrappers
     // -----------------------
-    public Tournee save(Tournee t) { return repo.save(t); }
+    public Tournee save(Tournee t) {
+        // Les snapshots de points de collecte doivent être fournis (ou construits lors de la planification intelligente)
+        
+        // Les snapshots du véhicule et des employés doivent être créés avant la sauvegarde
+        // Si manquants, c'est une erreur - on ne peut pas les recréer sans les IDs
+        
+        return repo.save(t);
+    }
     public List<Tournee> findAll() { return repo.findAll(); }
     public Tournee findById(String id) { return repo.findById(id).orElse(null); }
     public void delete(String id) { repo.deleteById(id); }
+
+        public TourneeStatsResponse getStats() {
+        List<Tournee> tours = repo.findAll();
+
+        long planned = tours.stream()
+            .filter(t -> t.getStatus() != null && t.getStatus().equalsIgnoreCase("planifiée"))
+            .count();
+
+        long inProgress = tours.stream()
+            .filter(t -> t.getStatus() != null && t.getStatus().equalsIgnoreCase("en cours"))
+            .count();
+
+        long completed = tours.stream()
+            .filter(t -> t.getStatus() != null && t.getStatus().equalsIgnoreCase("terminée"))
+            .count();
+
+        // Moyenne du taux de remplissage des conteneurs (points de collecte)
+        List<CollectPoint> points = collectPointRepo.findAll();
+        double avgFillRate = points.stream()
+            .mapToDouble(p -> {
+                if (p.getNiveau() != null && p.getNiveau() >= 0) return p.getNiveau();
+                return fillPercent(p);
+            })
+            .filter(v -> !Double.isNaN(v) && v >= 0)
+            .average()
+            .orElse(0.0);
+
+        // arrondir à une décimale pour l'affichage
+        double rounded = Math.round(avgFillRate * 10.0) / 10.0;
+
+        return new TourneeStatsResponse(
+            tours.size(),
+            planned,
+            inProgress,
+            completed,
+            rounded
+        );
+        }
 
     // -----------------------
     // Public plan methods
@@ -88,7 +137,7 @@ public class TourneeService {
                 .collect(Collectors.toList());
         if (vehicles.isEmpty()) {
             log.warn("Aucun véhicule disponible pour planification.");
-            return null;
+            throw new IllegalStateException("Aucun véhicule disponible. Veuillez rendre un véhicule disponible avant de planifier une tournée.");
         }
 
         // 2) Charger points pertinents (non vides, valide capacity)
@@ -96,16 +145,23 @@ public class TourneeService {
                 .filter(p -> p.getMaxCapacityLiters() > 0)
                 .filter(p -> p.getCapacityLiters() > 0)
                 .filter(p -> !"VIDE".equalsIgnoreCase(p.getStatus()))
-                .filter(p -> fillPercent(p) >= MIN_FILL_PERCENT_TO_VISIT)
+                .filter(p -> {
+                    // Utiliser le champ niveau directement si disponible
+                    double fillPct = (p.getNiveau() != null && p.getNiveau() > 0) ? p.getNiveau() : fillPercent(p);
+                    return fillPct >= MIN_FILL_PERCENT_TO_VISIT;
+                })
                 .collect(Collectors.toList());
         if (allPoints.isEmpty()) {
             log.warn("Aucun point pertinent pour planification.");
-            return null;
+            throw new IllegalStateException("Aucun point de collecte nécessite une visite. Tous les points sont vides ou ont un niveau de remplissage trop faible.");
         }
 
         // 3) Trier par fill% décroissant (priorité initiale)
         List<CollectPoint> candidates = allPoints.stream()
-                .sorted(Comparator.comparingDouble((CollectPoint p) -> fillPercent(p)).reversed())
+                .sorted(Comparator.comparingDouble((CollectPoint p) -> {
+                    // Utiliser le champ niveau directement si disponible
+                    return (p.getNiveau() != null && p.getNiveau() > 0) ? p.getNiveau() : fillPercent(p);
+                }).reversed())
                 .collect(Collectors.toList());
 
 // 4) Choisir le meilleur véhicule
@@ -125,28 +181,73 @@ final Vehicle chosenVehicle = tempVehicle;
 
         // 6) Si aucun point sélectionné -> essayer fallback: prendre le plus petit qui rentre
         if (greedy.selectedIds.isEmpty()) {
+            log.warn("Greedy n'a sélectionné aucun point. Véhicule capacité: {}, Nombre de candidats: {}", 
+                     chosenVehicle.getCapacity(), candidates.size());
+            
+            // Log des capacités des candidats pour debug
+            candidates.forEach(p -> log.debug("Point {}: capacityLiters={}, niveau={}", 
+                                              p.getId(), p.getCapacityLiters(), p.getNiveau()));
+            
             Optional<CollectPoint> small = candidates.stream()
-                    .filter(p -> p.getCapacityLiters() <= chosenVehicle.getCapacity())
+                    .filter(p -> {
+                        boolean fits = p.getCapacityLiters() <= chosenVehicle.getCapacity();
+                        if (!fits) {
+                            log.debug("Point {} ne rentre pas: capacityLiters={} > vehicleCapacity={}", 
+                                     p.getId(), p.getCapacityLiters(), chosenVehicle.getCapacity());
+                        }
+                        return fits;
+                    })
                     .min(Comparator.comparingDouble(CollectPoint::getCapacityLiters));
+            
             if (small.isPresent()) {
                 greedy.selectedIds.add(small.get().getId());
                 greedy.estimatedDistanceKm = distanceKm(chosenVehicle.getLatitude(), chosenVehicle.getLongitude(),
                         small.get().getLatitude(), small.get().getLongitude());
+                log.info("Fallback: ajout du point {} avec capacité {}", small.get().getId(), small.get().getCapacityLiters());
             } else {
-                log.warn("Aucun point ne rentre dans la capacité du véhicule {}", chosenVehicle.getId());
-                return null;
+                log.error("Aucun point ne rentre dans la capacité du véhicule {} (capacité: {})", 
+                         chosenVehicle.getId(), chosenVehicle.getCapacity());
+                throw new IllegalStateException("La capacité du véhicule disponible est insuffisante pour collecter les déchets des points de collecte. Veuillez utiliser un véhicule avec une plus grande capacité.");
             }
         }
 
         // 7) Assigner employés (au moins 2, dont au moins 1 conducteur si possible)
         List<String> assignedEmployees = assignEmployees();
+        if (assignedEmployees.size() < MIN_EMPLOYEES_PER_TOUR) {
+            throw new IllegalStateException("Pas assez d'employés disponibles. Il faut au moins " + MIN_EMPLOYEES_PER_TOUR + " employés disponibles pour créer une tournée.");
+        }
 
-        // 8) Construire la tournée
+        // 8) Construire la tournée avec snapshots des points
         Tournee t = new Tournee();
         t.setDate(System.currentTimeMillis());
-        t.setCollectPoints(greedy.selectedIds);
-        t.setVehicleId(chosenVehicle.getId());
-        t.setEmployeeIds(assignedEmployees);
+        
+        // Créer les snapshots des points de collecte pour imbrication
+        List<Tournee.CollectPointSnapshot> snapshots = greedy.selectedIds.stream()
+            .map(id -> collectPointRepo.findById(id).orElse(null))
+            .filter(p -> p != null)
+            .map(p -> new Tournee.CollectPointSnapshot(
+                p.getId(),
+                p.getNiveau(),
+                p.getCapacityLiters(),
+                p.getStatus()
+            ))
+            .collect(Collectors.toList());
+        t.setCollectPointsData(snapshots);
+        
+        // Créer le snapshot du véhicule
+        t.setVehicleData(new Tournee.VehicleSnapshot(
+            chosenVehicle.getId(),
+            chosenVehicle.getMatricule(),
+            chosenVehicle.getType()
+        ));
+        
+        // Créer les snapshots des employés avec selectedSkill
+        List<Tournee.EmployeeSnapshot> employeeSnapshots = assignedEmployees.stream()
+            .map(id -> employeeRepo.findById(id).orElse(null))
+            .filter(e -> e != null)
+            .map(this::toEmployeeSnapshotWithSkill)
+            .collect(Collectors.toList());
+        t.setEmployeesData(employeeSnapshots);
         t.setStatus("planifiée");
         t.setEstimatedDistance(greedy.estimatedDistanceKm);
 
@@ -173,7 +274,28 @@ final Vehicle chosenVehicle = tempVehicle;
                 .limit(TOP_POINTS_TO_CONSIDER_FOR_VEHICLE)
                 .collect(Collectors.toList());
 
-        return vehicles.stream().min(Comparator.comparingDouble(
+        // Calculer la capacité minimale requise (au moins le plus petit point)
+        double minRequiredCapacity = candidates.stream()
+                .mapToDouble(CollectPoint::getCapacityLiters)
+                .min()
+                .orElse(0.0);
+
+        log.info("Capacité minimale requise: {} L", minRequiredCapacity);
+
+        // Filtrer les véhicules ayant une capacité suffisante
+        List<Vehicle> feasibleVehicles = vehicles.stream()
+                .filter(v -> v.getCapacity() >= minRequiredCapacity)
+                .collect(Collectors.toList());
+
+        if (feasibleVehicles.isEmpty()) {
+            log.warn("Aucun véhicule avec capacité suffisante (>= {} L). Utilisation de tous les véhicules.", minRequiredCapacity);
+            feasibleVehicles = vehicles;
+        }
+
+        log.info("Véhicules avec capacité suffisante: {}", feasibleVehicles.size());
+
+        // Choisir le véhicule le plus proche parmi ceux qui ont la capacité
+        return feasibleVehicles.stream().min(Comparator.comparingDouble(
                 v -> avgDistanceToPoints(v, topForScoring)
         )).orElse(null);
     }
@@ -202,27 +324,49 @@ final Vehicle chosenVehicle = tempVehicle;
         double curLon = vehicle.getLongitude();
         double totalDistanceKm = 0.0;
 
+        log.info("=== Début planGreedyForVehicle ===");
+        log.info("Véhicule: id={}, capacité={}, position=({}, {})", 
+                 vehicle.getId(), vehicle.getCapacity(), vehicle.getLatitude(), vehicle.getLongitude());
+        log.info("Nombre de candidats: {}", candidates.size());
+
         // defensive copy of candidates (already sorted by fill% desc)
         List<CollectPoint> candidateList = new ArrayList<>(candidates);
 
+        int iteration = 0;
         while (true) {
+            iteration++;
             final double curLatLocal = curLat;
             final double curLonLocal = curLon;
             final double remLocal = remaining;
 
+            log.debug("Itération {}: capacité restante={}", iteration, remLocal);
+
             // feasible points that fit remaining capacity and not already selected
             List<CollectPoint> feasible = candidateList.stream()
                     .filter(p -> !selectedIds.contains(p.getId()))
-                    .filter(p -> p.getCapacityLiters() <= remLocal)
+                    .filter(p -> {
+                        boolean fits = p.getCapacityLiters() <= remLocal;
+                        if (!fits && selectedIds.isEmpty()) {
+                            log.warn("Point {} exclu: capacityLiters={} > remaining={}", 
+                                    p.getId(), p.getCapacityLiters(), remLocal);
+                        }
+                        return fits;
+                    })
                     .collect(Collectors.toList());
 
-            if (feasible.isEmpty()) break;
+            log.debug("Points faisables à l'itération {}: {}", iteration, feasible.size());
+            if (feasible.isEmpty()) {
+                log.info("Aucun point faisable. Fin de l'algorithme. Points sélectionnés: {}", selectedIds.size());
+                break;
+            }
 
             // compute score: higher is better
             CollectPoint next = feasible.stream()
                     .max(Comparator.comparingDouble((ToDoubleFunction<CollectPoint>) p -> {
                         double dist = distanceKm(curLatLocal, curLonLocal, p.getLatitude(), p.getLongitude());
-                        double score = FILL_WEIGHT * fillPercent(p) - DIST_WEIGHT * dist;
+                        // Utiliser le champ niveau directement si disponible
+                        double fillPct = (p.getNiveau() != null && p.getNiveau() > 0) ? p.getNiveau() : fillPercent(p);
+                        double score = FILL_WEIGHT * fillPct - DIST_WEIGHT * dist;
                         return score;
                     }))
                     .orElse(null);
@@ -234,15 +378,24 @@ final Vehicle chosenVehicle = tempVehicle;
             double d = distanceKm(curLat, curLon, next.getLatitude(), next.getLongitude());
             if (d < Double.MAX_VALUE) totalDistanceKm += d;
 
+            log.info("Point {} sélectionné: capacité={}, distance={} km", 
+                    next.getId(), next.getCapacityLiters(), d);
+
             // update
             curLat = next.getLatitude();
             curLon = next.getLongitude();
             remaining -= next.getCapacityLiters();
 
+            log.debug("Capacité restante après sélection: {}", remaining);
+
             // minor safety: break if remaining capacity <= 0
-            if (remaining <= 0) break;
+            if (remaining <= 0) {
+                log.info("Capacité du véhicule épuisée");
+                break;
+            }
         }
 
+        log.info("=== Fin planGreedyForVehicle: {} points sélectionnés ===", selectedIds.size());
         return new GreedyResult(selectedIds, totalDistanceKm);
     }
 
@@ -266,9 +419,10 @@ final Vehicle chosenVehicle = tempVehicle;
 
         List<String> assigned = new ArrayList<>();
 
-        // Prefer a conducteur
+        // Prefer a conducteur (check skills instead of role)
         Optional<com.projet.entity.Employee> conducteurOpt = available.stream()
-                .filter(e -> e.getRole() != null && e.getRole().toLowerCase().contains("conducteur"))
+                .filter(e -> e.getSkills() != null && e.getSkills().stream()
+                        .anyMatch(skill -> skill.toLowerCase().contains("conducteur") || skill.toLowerCase().contains("chauffeur")))
                 .findAny();
         conducteurOpt.ifPresent(c -> assigned.add(c.getId()));
 
@@ -286,6 +440,31 @@ final Vehicle chosenVehicle = tempVehicle;
         return assigned;
     }
 
+    /**
+     * Crée un snapshot d'employé avec la compétence sélectionnée (priorité conducteur/chauffeur).
+     */
+    private Tournee.EmployeeSnapshot toEmployeeSnapshotWithSkill(Employee e) {
+        return new Tournee.EmployeeSnapshot(
+                e.getId(),
+                e.getName(),
+                chooseSelectedSkill(e)
+        );
+    }
+
+    /**
+     * Sélectionne une compétence: conducteur/chauffeur en priorité, sinon la première disponible.
+     */
+    private String chooseSelectedSkill(Employee e) {
+        if (e == null || e.getSkills() == null || e.getSkills().isEmpty()) return null;
+        return e.getSkills().stream()
+                .filter(s -> {
+                    String lower = s.toLowerCase();
+                    return lower.contains("conducteur") || lower.contains("chauffeur");
+                })
+                .findFirst()
+                .orElse(e.getSkills().get(0));
+    }
+
     // -----------------------
     // Tour lifecycle (start/terminate)
     // -----------------------
@@ -295,8 +474,8 @@ final Vehicle chosenVehicle = tempVehicle;
         t.setStatus("en cours");
 
         // mark vehicle unavailable
-        if (t.getVehicleId() != null) {
-            Vehicle v = vehicleRepo.findById(t.getVehicleId()).orElse(null);
+        if (t.getVehicleData() != null) {
+            Vehicle v = vehicleRepo.findById(t.getVehicleData().getId()).orElse(null);
             if (v != null && v.isAvailable()) {
                 v.setAvailable(false);
                 vehicleRepo.save(v);
@@ -304,9 +483,9 @@ final Vehicle chosenVehicle = tempVehicle;
         }
 
         // mark employees unavailable
-        if (t.getEmployeeIds() != null) {
-            for (String empId : t.getEmployeeIds()) {
-                com.projet.entity.Employee e = employeeService.findById(empId);
+        if (t.getEmployeesData() != null) {
+            for (Tournee.EmployeeSnapshot empSnap : t.getEmployeesData()) {
+                com.projet.entity.Employee e = employeeService.findById(empSnap.getId());
                 if (e != null && e.isAvailable()) {
                     e.setAvailable(false);
                     employeeService.save(e);
@@ -323,8 +502,8 @@ final Vehicle chosenVehicle = tempVehicle;
         t.setStatus("terminée");
 
         // liberer vehicle
-        if (t.getVehicleId() != null) {
-            Vehicle v = vehicleRepo.findById(t.getVehicleId()).orElse(null);
+        if (t.getVehicleData() != null) {
+            Vehicle v = vehicleRepo.findById(t.getVehicleData().getId()).orElse(null);
             if (v != null && !v.isAvailable()) {
                 v.setAvailable(true);
                 vehicleRepo.save(v);
@@ -332,9 +511,9 @@ final Vehicle chosenVehicle = tempVehicle;
         }
 
         // liberer employees
-        if (t.getEmployeeIds() != null) {
-            for (String empId : t.getEmployeeIds()) {
-                com.projet.entity.Employee e = employeeService.findById(empId);
+        if (t.getEmployeesData() != null) {
+            for (Tournee.EmployeeSnapshot empSnap : t.getEmployeesData()) {
+                com.projet.entity.Employee e = employeeService.findById(empSnap.getId());
                 if (e != null && !e.isAvailable()) {
                     e.setAvailable(true);
                     employeeService.save(e);
@@ -343,9 +522,10 @@ final Vehicle chosenVehicle = tempVehicle;
         }
 
         // update collect points (vider)
-        if (t.getCollectPoints() != null) {
-            for (String cpId : t.getCollectPoints()) {
-                CollectPoint cp = collectPointRepo.findById(cpId).orElse(null);
+        if (t.getCollectPointsData() != null) {
+            for (Tournee.CollectPointSnapshot cpSnap : t.getCollectPointsData()) {
+                if (cpSnap == null || cpSnap.getId() == null) continue;
+                CollectPoint cp = collectPointRepo.findById(cpSnap.getId()).orElse(null);
                 if (cp != null) {
                     cp.setCapacityLiters(0.0);
                     cp.setStatus("VIDE");

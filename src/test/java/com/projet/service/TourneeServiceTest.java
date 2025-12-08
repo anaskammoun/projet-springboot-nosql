@@ -56,11 +56,13 @@ class TourneeServiceTest {
         Tournee result = service.planifierIntelligent();
 
         assertNotNull(result);
-        assertEquals("veh-1", result.getVehicleId());
+        assertNotNull(result.getVehicleData());
+        assertEquals("veh-1", result.getVehicleData().getId());
         // expected picks: p3 (100% -> 300), then p1 (75% -> 600) -> remaining 100 can't take p2 or p4
-        assertEquals(2, result.getCollectPoints().size());
-        assertEquals("p3", result.getCollectPoints().get(0));
-        assertEquals("p1", result.getCollectPoints().get(1));
+        assertNotNull(result.getCollectPointsData());
+        assertEquals(2, result.getCollectPointsData().size());
+        assertEquals("p3", result.getCollectPointsData().get(0).getId());
+        assertEquals("p1", result.getCollectPointsData().get(1).getId());
 
         verify(vehicleRepo).save(any());
         verify(tourRepo).save(any());

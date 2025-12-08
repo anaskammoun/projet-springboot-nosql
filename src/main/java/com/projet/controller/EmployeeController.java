@@ -52,11 +52,11 @@ public class EmployeeController {
 
         // Mettre à jour les champs
         existing.setName(e.getName());
-        existing.setRole(e.getRole());
+        existing.setSkills(e.getSkills());
         existing.setAvailable(e.isAvailable());
        
     
-        // ajoute d’autres champs si nécessaire
+        // ajoute d'autres champs si nécessaire
 
         return employeeService.save(existing);
     }

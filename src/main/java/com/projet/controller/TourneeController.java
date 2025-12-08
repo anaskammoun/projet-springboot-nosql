@@ -7,6 +7,7 @@ import org.springframework.http.ResponseEntity;
 
 import com.projet.entity.Tournee;
 import com.projet.service.TourneeService;
+import com.projet.dto.TourneeStatsResponse;
 
 import lombok.RequiredArgsConstructor;
 
@@ -24,6 +25,9 @@ public class TourneeController {
     @GetMapping
     public List<Tournee> getAll() { return service.findAll(); }
 
+    @GetMapping("/stats")
+    public TourneeStatsResponse getStats() { return service.getStats(); }
+
     @GetMapping("/{id}")
     public Tournee getOne(@PathVariable String id) { return service.findById(id); }
 
@@ -31,17 +35,27 @@ public class TourneeController {
     public void delete(@PathVariable String id) { service.delete(id); }
     
     @PostMapping("/planifier-intelligent")
-    public ResponseEntity<Tournee> planifierIntelligent() {
-        Tournee t = service.planifierIntelligent();
-        if (t == null) return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(null);
-        return ResponseEntity.ok(t);
+    public ResponseEntity<?> planifierIntelligent() {
+        try {
+            Tournee t = service.planifierIntelligent();
+            return ResponseEntity.ok(t);
+        } catch (IllegalStateException e) {
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(e.getMessage());
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body("Erreur lors de la planification de la tournée");
+        }
     }
 
     @PostMapping("/planifier-intelligent/preview")
-    public ResponseEntity<Tournee> planifierIntelligentPreview() {
-        Tournee t = service.planifierIntelligentPreview();
-        if (t == null) return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(null);
-        return ResponseEntity.ok(t);
+    public ResponseEntity<?> planifierIntelligentPreview() {
+        try {
+            Tournee t = service.planifierIntelligentPreview();
+            return ResponseEntity.ok(t);
+        } catch (IllegalStateException e) {
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(e.getMessage());
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body("Erreur lors de la génération de la proposition");
+        }
     }
     @PutMapping("/{id}")
         public Tournee update(@PathVariable String id, @RequestBody Tournee t) {    
@@ -50,9 +64,9 @@ public class TourneeController {
 
             // Mettre à jour les champs
             existing.setDate(t.getDate());
-            existing.setVehicleId(t.getVehicleId());
-            existing.setEmployeeIds(t.getEmployeeIds());
-            existing.setCollectPoints(t.getCollectPoints());
+            existing.setCollectPointsData(t.getCollectPointsData());
+            existing.setVehicleData(t.getVehicleData());
+            existing.setEmployeesData(t.getEmployeesData());
             // Persist status and estimatedDistance coming from the client
             existing.setStatus(t.getStatus());
             existing.setEstimatedDistance(t.getEstimatedDistance());

@@ -27,6 +27,13 @@ public class CollectPointController {
 
     @PostMapping
     public CollectPoint create(@RequestBody CollectPoint p) {
+        // Calculer le niveau de remplissage
+        if (p.getMaxCapacityLiters() > 0) {
+            double niveau = (p.getCapacityLiters() / p.getMaxCapacityLiters()) * 100;
+            p.setNiveau(Math.round(niveau * 100.0) / 100.0); // arrondir à 2 décimales
+        } else {
+            p.setNiveau(0.0);
+        }
         return service.save(p);
     }
 
@@ -57,6 +64,14 @@ public class CollectPointController {
         existing.setStatus(p.getStatus());
         existing.setLatitude(p.getLatitude());
         existing.setLongitude(p.getLongitude());
+        
+        // Calculer le niveau de remplissage
+        if (existing.getMaxCapacityLiters() > 0) {
+            double niveau = (existing.getCapacityLiters() / existing.getMaxCapacityLiters()) * 100;
+            existing.setNiveau(Math.round(niveau * 100.0) / 100.0); // arrondir à 2 décimales
+        } else {
+            existing.setNiveau(0.0);
+        }
 
         return service.save(existing);
     }
