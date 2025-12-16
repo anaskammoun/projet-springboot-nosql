@@ -43,7 +43,12 @@ public class CollectPointService {
                 // create a notification for this collect point
                 Notification n = new Notification();
                 n.setType("CONTAINER_HIGH");
-                String msg = String.format("Point de collecte %s (%s) dépasse 80%% — %.1f%%", saved.getId(), saved.getWasteType() == null ? "?" : saved.getWasteType(), newRatio);
+                String msg = String.format(
+                    "Point de collecte %s (%s) dépasse 80%% — %.1f%%",
+                    formatLocation(saved),
+                    saved.getWasteType() == null ? "?" : saved.getWasteType(),
+                    newRatio
+                );
                 n.setMessage(msg);
                 n.setCollectPointId(saved.getId());
                 //n.setTourneeId(null);
@@ -64,6 +69,14 @@ public class CollectPointService {
 
     public List<CollectPoint> findAll() {
         return repo.findAll();
+    }
+
+    public List<CollectPoint> findByStatus(String status) {
+        return repo.findByStatusIgnoreCase(status);
+    }
+
+    public List<CollectPoint> findByWasteType(String wasteType) {
+        return repo.findByWasteTypeIgnoreCase(wasteType);
     }
 
     public CollectPoint findById(String id) {
@@ -96,7 +109,12 @@ public List<CollectPoint> randomizeCapacities() {
             if (newRatio > 80.0 && oldRatio <= 80.0) {
                 Notification n = new Notification();
                 n.setType("CONTAINER_HIGH");
-                String msg = String.format("Point de collecte %s (%s) dépasse 80%% — %.1f%%", p.getId(), p.getWasteType() == null ? "?" : p.getWasteType(), newRatio);
+                String msg = String.format(
+                    "Point de collecte %s (%s) dépasse 80%% — %.1f%%",
+                    formatLocation(p),
+                    p.getWasteType() == null ? "?" : p.getWasteType(),
+                    newRatio
+                );
                 n.setMessage(msg);
                 n.setCollectPointId(p.getId());
                 //n.setTourneeId(null);
@@ -140,5 +158,13 @@ public List<CollectPoint> randomizeCapacities() {
         } else {
             p.setStatus("PLEIN");
         }
+    }
+
+    private String formatLocation(CollectPoint p) {
+        // CollectPoint stores primitives; treat 0/0 as missing coords
+        boolean hasCoords = (p.getLatitude() != 0.0 || p.getLongitude() != 0.0);
+        return hasCoords
+            ? String.format("(%.5f, %.5f)", p.getLatitude(), p.getLongitude())
+            : p.getId();
     }
 }

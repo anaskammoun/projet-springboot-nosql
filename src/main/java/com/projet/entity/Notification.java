@@ -17,6 +17,8 @@ public class Notification {
     //private String tourneeId;
     private long timestamp;
     // optionally store the location that caused the notification
+
+    // à vérifier car collectPoint already has lat/lon
     private Double latitude;
     private Double longitude;
 

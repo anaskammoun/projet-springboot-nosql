@@ -15,13 +15,16 @@ public class Employee {
     private String id;
 
     private String name;
+    
+    private String prenom;
 
     @Indexed(unique = true)
     private String cin;
 
     // Liste des compétences de l'employé
     private List<String> skills;
-  
+
+    @Indexed
     private boolean available; // disponibilité
     
 }

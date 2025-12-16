@@ -10,6 +10,7 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import com.projet.entity.Vehicle;
@@ -31,8 +32,19 @@ public class VehicleController {
     }
 
     @GetMapping
-    public List<Vehicle> getAll() { 
-        return service.findAll(); 
+    public List<Vehicle> getAll(
+            @RequestParam(name = "available", required = false) Boolean available,
+            @RequestParam(name = "type", required = false) String type) {
+        if (available != null && type != null && !type.isBlank()) {
+            return service.findByAvailableAndType(available, type);
+        }
+        if (available != null) {
+            return service.findByAvailable(available);
+        }
+        if (type != null && !type.isBlank()) {
+            return service.findByType(type);
+        }
+        return service.findAll();
     }
 
     @GetMapping("/{id}")

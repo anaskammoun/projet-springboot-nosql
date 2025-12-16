@@ -60,11 +60,47 @@ public class TourneeService {
     // Basic CRUD wrappers
     // -----------------------
     public Tournee save(Tournee t) {
-        // Les snapshots de points de collecte doivent être fournis (ou construits lors de la planification intelligente)
+        // Si les snapshots des points de collecte sont vides ou incomplets, les reconstruire à partir des IDs
+        if (t.getCollectPointsData() == null || t.getCollectPointsData().isEmpty()) {
+            // Pas de points, c'est ok
+        } else {
+            // Vérifier si les snapshots ont besoin d'être complétés avec les coordonnées
+            List<Tournee.CollectPointSnapshot> completeSnapshots = new java.util.ArrayList<>();
+            for (Tournee.CollectPointSnapshot snap : t.getCollectPointsData()) {
+                CollectPoint point = collectPointRepo.findById(snap.getId()).orElse(null);
+                if (point != null) {
+                    // Reconstruire le snapshot avec toutes les données, incluant les coordonnées
+                    Tournee.CollectPointSnapshot completeSnap = new Tournee.CollectPointSnapshot(
+                        point.getId(),
+                        point.getNiveau(),
+                        point.getCapacityLiters(),
+                        point.getStatus(),
+                        point.getLatitude(),
+                        point.getLongitude()
+                    );
+                    completeSnapshots.add(completeSnap);
+                }
+            }
+            t.setCollectPointsData(completeSnapshots);
+        }
         
-        // Les snapshots du véhicule et des employés doivent être créés avant la sauvegarde
-        // Si manquants, c'est une erreur - on ne peut pas les recréer sans les IDs
-        
+        // Reconstruire les snapshots des employés avec CIN et autres données complètes
+        if (t.getEmployeesData() != null && !t.getEmployeesData().isEmpty()) {
+            List<Tournee.EmployeeSnapshot> completeEmployeeSnapshots = new java.util.ArrayList<>();
+            for (Tournee.EmployeeSnapshot snap : t.getEmployeesData()) {
+                Employee emp = employeeRepo.findById(snap.getId()).orElse(null);
+                if (emp != null) {
+                    // Reconstruire le snapshot avec toutes les données, incluant le CIN
+                    Tournee.EmployeeSnapshot completeSnap = new Tournee.EmployeeSnapshot(
+                        emp.getId(),
+                        emp.getCin(),
+                        snap.getSelectedSkill()  // Conserver la compétence sélectionnée originelle
+                    );
+                    completeEmployeeSnapshots.add(completeSnap);
+                }
+            }
+            t.setEmployeesData(completeEmployeeSnapshots);
+        }
         return repo.save(t);
     }
     public List<Tournee> findAll() { return repo.findAll(); }
@@ -179,6 +215,12 @@ final Vehicle chosenVehicle = tempVehicle;
         // 5) Planifier la tournée (greedy pondéré)
         GreedyResult greedy = planGreedyForVehicle(chosenVehicle, candidates);
 
+        // 5bis) Optimiser l'ordre obtenu par un 2-opt léger
+        List<String> optimizedIds = optimizeRoute2Opt(chosenVehicle, greedy.selectedIds);
+        greedy.selectedIds.clear();
+        greedy.selectedIds.addAll(optimizedIds);
+        greedy.estimatedDistanceKm = computeRouteDistance(chosenVehicle, greedy.selectedIds);
+
         // 6) Si aucun point sélectionné -> essayer fallback: prendre le plus petit qui rentre
         if (greedy.selectedIds.isEmpty()) {
             log.warn("Greedy n'a sélectionné aucun point. Véhicule capacité: {}, Nombre de candidats: {}", 
@@ -229,7 +271,9 @@ final Vehicle chosenVehicle = tempVehicle;
                 p.getId(),
                 p.getNiveau(),
                 p.getCapacityLiters(),
-                p.getStatus()
+                p.getStatus(),
+                p.getLatitude(),
+                p.getLongitude()
             ))
             .collect(Collectors.toList());
         t.setCollectPointsData(snapshots);
@@ -409,6 +453,70 @@ final Vehicle chosenVehicle = tempVehicle;
     }
 
     // -----------------------
+    // 2-opt post-optimisation
+    // -----------------------
+    /**
+     * Améliore l'ordre des points sélectionnés (TSP 2-opt) pour réduire la distance totale.
+     * Complexité O(n^2) mais acceptable sur de petites tournées.
+     */
+    private List<String> optimizeRoute2Opt(Vehicle vehicle, List<String> pointIds) {
+        if (pointIds == null || pointIds.size() < 3) return pointIds;
+
+        List<String> bestOrder = new ArrayList<>(pointIds);
+        double bestDistance = computeRouteDistance(vehicle, bestOrder);
+
+        boolean improved = true;
+        while (improved) {
+            improved = false;
+            for (int i = 0; i < bestOrder.size() - 2; i++) {
+                for (int j = i + 2; j < bestOrder.size(); j++) {
+                    // éviter de casser le lien final (pas de swap du tout dernier avec le tout premier)
+                    if (i == 0 && j == bestOrder.size() - 1) continue;
+
+                    List<String> candidate = new ArrayList<>(bestOrder);
+                    java.util.Collections.reverse(candidate.subList(i + 1, j + 1));
+
+                    double candidateDistance = computeRouteDistance(vehicle, candidate);
+                    if (candidateDistance + 1e-6 < bestDistance) { // tolérance numérique
+                        bestOrder = candidate;
+                        bestDistance = candidateDistance;
+                        improved = true;
+                        break; // redémarrer pour profiter des gains récents
+                    }
+                }
+                if (improved) break;
+            }
+        }
+
+        log.info("2-opt appliqué: distance avant={}, après={}, points={}", computeRouteDistance(vehicle, pointIds), bestDistance, bestOrder.size());
+        return bestOrder;
+    }
+
+    /**
+     * Distance totale du parcours (du véhicule vers le premier point puis entre points).
+     * Ignore les points introuvables ou à coordonnées invalides.
+     */
+    private double computeRouteDistance(Vehicle vehicle, List<String> orderedIds) {
+        if (orderedIds == null || orderedIds.isEmpty()) return 0.0;
+
+        double prevLat = vehicle.getLatitude();
+        double prevLon = vehicle.getLongitude();
+        double total = 0.0;
+
+        for (String id : orderedIds) {
+            CollectPoint cp = collectPointRepo.findById(id).orElse(null);
+            if (cp == null) continue;
+
+            double d = distanceKm(prevLat, prevLon, cp.getLatitude(), cp.getLongitude());
+            if (d < Double.MAX_VALUE) total += d;
+
+            prevLat = cp.getLatitude();
+            prevLon = cp.getLongitude();
+        }
+        return total;
+    }
+
+    // -----------------------
     // Employee assignment
     // -----------------------
     private List<String> assignEmployees() {
@@ -446,7 +554,7 @@ final Vehicle chosenVehicle = tempVehicle;
     private Tournee.EmployeeSnapshot toEmployeeSnapshotWithSkill(Employee e) {
         return new Tournee.EmployeeSnapshot(
                 e.getId(),
-                e.getName(),
+                e.getCin(),
                 chooseSelectedSkill(e)
         );
     }

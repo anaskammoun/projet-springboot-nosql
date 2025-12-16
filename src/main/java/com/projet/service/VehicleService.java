@@ -20,6 +20,18 @@ public class VehicleService {
         return repo.findByMatricule(matricule);
     }
 
+    public List<Vehicle> findByAvailable(boolean available) {
+        return repo.findByAvailable(available);
+    }
+
+    public List<Vehicle> findByType(String type) {
+        return repo.findByTypeIgnoreCase(type);
+    }
+
+    public List<Vehicle> findByAvailableAndType(boolean available, String type) {
+        return repo.findByAvailableAndTypeIgnoreCase(available, type);
+    }
+
     // CRUD
     public Vehicle save(Vehicle v) { 
         return repo.save(v); 

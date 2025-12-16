@@ -11,6 +11,7 @@ import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.RequestParam;
 
 import com.projet.entity.CollectPoint;
 import com.projet.service.CollectPointService;
@@ -38,7 +39,15 @@ public class CollectPointController {
     }
 
     @GetMapping
-    public List<CollectPoint> getAll() {
+    public List<CollectPoint> getAll(
+            @RequestParam(name = "status", required = false) String status,
+            @RequestParam(name = "wasteType", required = false) String wasteType) {
+        if (status != null && !status.isBlank()) {
+            return service.findByStatus(status);
+        }
+        if (wasteType != null && !wasteType.isBlank()) {
+            return service.findByWasteType(wasteType);
+        }
         return service.findAll();
     }
 
@@ -75,10 +84,9 @@ public class CollectPointController {
 
         return service.save(existing);
     }
-@PutMapping("/planifier")
-public List<CollectPoint> planifier() {
-    return service.randomizeCapacities();
-}
 
-
+    @PutMapping("/planifier")
+    public List<CollectPoint> planifier() {
+        return service.randomizeCapacities();
+    }
 }

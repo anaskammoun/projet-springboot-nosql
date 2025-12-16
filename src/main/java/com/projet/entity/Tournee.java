@@ -2,6 +2,7 @@ package com.projet.entity;
 
 import java.util.List;
 import org.springframework.data.annotation.Id;
+import org.springframework.data.mongodb.core.index.Indexed;
 import org.springframework.data.mongodb.core.mapping.Document;
 import lombok.Data;
 import lombok.AllArgsConstructor;
@@ -25,6 +26,7 @@ public class Tournee {
     // Imbrication des données des employés pour affichage rapide
     private List<EmployeeSnapshot> employeesData;
 
+    @Indexed
     private String status;  // planifiée, en cours, terminée
     private double estimatedDistance; // km
 
@@ -41,6 +43,8 @@ public class Tournee {
         private Double niveau;            // Niveau de remplissage en % (0-100)
         private Double capacityLiters;    // Capacité actuelle en litres
         private String status;            // Status: VIDE, NORMAL, PRESQUE_PLEIN, PLEIN
+        private Double latitude;          // Latitude du point de collecte
+        private Double longitude;         // Longitude du point de collecte
     }
 
     /**
@@ -65,7 +69,7 @@ public class Tournee {
     @NoArgsConstructor
     public static class EmployeeSnapshot {
         private String id;                // ID de l'employé
-        private String name;              // Nom de l'employé
+        private String cin;               // CIN de l'employé
         private String selectedSkill;     // Compétence choisie pour cette tournée spécifique
     }
 }

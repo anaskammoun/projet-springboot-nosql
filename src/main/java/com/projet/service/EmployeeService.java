@@ -12,6 +12,14 @@ public class EmployeeService {
 
     private final EmployeeRepository employeeRepository;
 
+    public List<Employee> findByAvailable(boolean available) {
+        return employeeRepository.findByAvailable(available);
+    }
+
+    public Employee findByCin(String cin) {
+        return employeeRepository.findByCin(cin);
+    }
+
     public Employee save(Employee e) {
         return employeeRepository.save(e);
     }

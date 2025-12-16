@@ -10,6 +10,7 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import com.projet.entity.Employee;
@@ -31,7 +32,16 @@ public class EmployeeController {
     }
 
     @GetMapping
-    public List<Employee> getAll() {
+    public List<Employee> getAll(
+            @RequestParam(name = "available", required = false) Boolean available,
+            @RequestParam(name = "cin", required = false) String cin) {
+        if (cin != null && !cin.isBlank()) {
+            Employee emp = employeeService.findByCin(cin);
+            return emp != null ? java.util.List.of(emp) : java.util.List.of();
+        }
+        if (available != null) {
+            return employeeService.findByAvailable(available);
+        }
         return employeeService.findAll();
     }
 
@@ -52,11 +62,10 @@ public class EmployeeController {
 
         // Mettre à jour les champs
         existing.setName(e.getName());
+        existing.setPrenom(e.getPrenom());
+        existing.setCin(e.getCin());
         existing.setSkills(e.getSkills());
         existing.setAvailable(e.isAvailable());
-       
-    
-        // ajoute d'autres champs si nécessaire
 
         return employeeService.save(existing);
     }

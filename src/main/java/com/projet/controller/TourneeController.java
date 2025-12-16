@@ -23,7 +23,13 @@ public class TourneeController {
     public Tournee create(@RequestBody Tournee t) { return service.save(t); }
 
     @GetMapping
-    public List<Tournee> getAll() { return service.findAll(); }
+    public List<Tournee> getAll(@RequestParam(name = "status", required = false) String status) {
+        List<Tournee> tours = service.findAll();
+        if (status == null || status.isBlank()) return tours;
+        return tours.stream()
+                .filter(t -> t.getStatus() != null && t.getStatus().equalsIgnoreCase(status))
+                .toList();
+    }
 
     @GetMapping("/stats")
     public TourneeStatsResponse getStats() { return service.getStats(); }
