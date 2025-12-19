@@ -26,6 +26,22 @@ public class EmployeeController {
 
     private final EmployeeService employeeService;
 
+    @GetMapping("/me")
+    public org.springframework.http.ResponseEntity<?> me(jakarta.servlet.http.HttpServletRequest request) {
+        String id = request.getHeader("X-Employee-Id");
+        String cin = request.getHeader("X-Employee-Cin");
+        Employee emp = null;
+        if (cin != null && !cin.isBlank()) {
+            emp = employeeService.findByCin(cin);
+        } else if (id != null && !id.isBlank()) {
+            emp = employeeService.findById(id);
+        }
+        if (emp == null) {
+            return org.springframework.http.ResponseEntity.status(401).body("Employee identity not provided or not found");
+        }
+        return org.springframework.http.ResponseEntity.ok(emp);
+    }
+
     @PostMapping
     public Employee create(@RequestBody Employee e) {
         return employeeService.save(e);
